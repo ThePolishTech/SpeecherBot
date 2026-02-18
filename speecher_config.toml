@@ -1,0 +1,29 @@
+#### Speecher Config ####
+
+[speecher]
+discord_token = "<token>"
+wakeup_message_channel = 0
+wakeup_messages = [
+    "Some",
+    "Messages",
+]
+database_file = "<database_file>"
+
+
+#### Model Configs ####
+
+[[model_bundle]]
+locale = "<locale>"
+models = [
+    { display_name = "", path = "" },
+]
+
+[[model_bundle]]
+bundle_path = "<bundle_path>"
+
+[model_bundles]
+bundles = [
+    { locale = "<locale>", models = [{ display_name = "", path = "" }] },
+    { bundle_path = "<bundle_path>" }
+]
+
