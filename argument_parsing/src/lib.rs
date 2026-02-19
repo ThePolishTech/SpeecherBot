@@ -52,6 +52,10 @@ pub fn parse_arguments(arguments: &str) -> Result<ArgumentsParseResult, Argument
                         output.action = ArgumentsAction::HelpScreen(HelpScreenOptions::Config);
                     },
                     path => {
+                        // TODO: Make sure we only remove quotes that pre- and 
+                        // post- fix the config path name, as right now for a
+                        // file named: `Someone's config`, the bot will look for
+                        // a file named: `Someones config`
                         output.overwritten_config_path = Some(
                             path.to_string()
                                 .replace("\"", "")
