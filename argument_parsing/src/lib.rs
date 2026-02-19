@@ -27,11 +27,53 @@ pub enum ConfigAction {
 
 #[derive(Debug, PartialEq)]
 pub enum ArgumentsParseError {
-    MalformedArguments
+    MalformedArguments(String)
 }
 
 pub fn parse_arguments(arguments: &str) -> Result<ArgumentsParseResult, ArgumentsParseError> {
-    todo!()
+    let mut output = ArgumentsParseResult {
+        overwritten_config_path: None,
+        action: ArgumentsAction::ProceedAsUsual
+    };
+
+    let mut args = arguments.split(" ").collect::<Vec<_>>();
+
+    while !args.is_empty() {
+        match args[..] {
+            ["--config", argument, ..] => {
+                match argument {
+                    "+verify" => {
+                        output.action = ArgumentsAction::ConfigAction(ConfigAction::Verify);
+                    },
+                    "+generate" => {
+                        output.action = ArgumentsAction::ConfigAction(ConfigAction::Generate);
+                    },
+                    other if ["help", "+help"].contains(&other) => {
+                        output.action = ArgumentsAction::HelpScreen(HelpScreenOptions::Config);
+                    },
+                    path => {
+                        output.overwritten_config_path = Some(
+                            path.to_string()
+                                .replace("\"", "")
+                                .replace("'", "")
+                                .replace("`", "")
+                        );
+                    }
+                }
+                args.drain(0..2);
+            }
+            [unknown, ..] => {
+                args.drain(0..1);
+                return Err(ArgumentsParseError::MalformedArguments(
+                    format!("Unkown argument: {unknown}")
+                ));
+            },
+            _ => {
+                args.drain(0..1);
+            }
+        }
+    }
+    Ok(output)
 }
 
 
