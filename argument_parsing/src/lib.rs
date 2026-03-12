@@ -8,13 +8,12 @@ pub struct ArgumentsParseResult {
 #[derive(Debug, PartialEq)]
 pub enum ArgumentsAction {
     ProceedAsUsual,
-    HelpScreen(HelpScreenOptions),
-
+    HelpScreen(HelpScreens),
     ConfigAction(ConfigAction),
 }
 
 #[derive(Debug, PartialEq)]
-pub enum HelpScreenOptions {
+pub enum HelpScreens {
     Default,
     Config
 }
@@ -27,21 +26,29 @@ pub enum ConfigAction {
 
 #[derive(Debug, PartialEq)]
 pub enum ArgumentsParseError {
-    MalformedArguments(String)
+    MalformedArguments(String),
+    MissingConfigPath,
+    EmptyConfigName,
 }
 
-pub fn parse_arguments(arguments: &str) -> Result<ArgumentsParseResult, ArgumentsParseError> {
+pub fn parse_arguments(arguments: Vec<String>) -> Result<ArgumentsParseResult, ArgumentsParseError> {
     let mut output = ArgumentsParseResult {
         overwritten_config_path: None,
         action: ArgumentsAction::ProceedAsUsual
     };
 
-    let mut args = arguments.split(" ").collect::<Vec<_>>();
+    let mut args = arguments
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>();
 
     while !args.is_empty() {
         match args[..] {
             ["--config", argument, ..] => {
                 match argument {
+                    "" => {
+                        return Err(ArgumentsParseError::EmptyConfigName);
+                    },
                     "+verify" => {
                         output.action = ArgumentsAction::ConfigAction(ConfigAction::Verify);
                     },
@@ -49,23 +56,28 @@ pub fn parse_arguments(arguments: &str) -> Result<ArgumentsParseResult, Argument
                         output.action = ArgumentsAction::ConfigAction(ConfigAction::Generate);
                     },
                     other if ["help", "+help"].contains(&other) => {
-                        output.action = ArgumentsAction::HelpScreen(HelpScreenOptions::Config);
+                        output.action = ArgumentsAction::HelpScreen(HelpScreens::Config);
                     },
-                    path => {
-                        // TODO: Make sure we only remove quotes that pre- and 
-                        // post- fix the config path name, as right now for a
-                        // file named: `Someone's config`, the bot will look for
-                        // a file named: `Someones config`
-                        output.overwritten_config_path = Some(
-                            path.to_string()
-                                .replace("\"", "")
-                                .replace("'", "")
-                                .replace("`", "")
-                        );
-                    }
+
+                    // Ugh
+                    // There's gotta be a better way
+                    path if path.len() >= 2 => {
+                        let raw = path.to_string().chars().collect::<Vec<_>>();
+
+                        if raw.ends_with(&[ raw[0] ]) && ['\'', '\"'].contains(&raw[0]) {
+                            output.overwritten_config_path = Some( raw[1..raw.len()-1].iter().collect::<String>() )
+                        } else {
+                            output.overwritten_config_path = Some( raw.iter().collect::<String>() )
+                        }
+                    },
+                    path => output.overwritten_config_path = Some(path.to_string())
                 }
                 args.drain(0..2);
-            }
+            },
+            ["--config"] => {
+                args.drain(0..1);
+                return Err(ArgumentsParseError::MissingConfigPath);
+            },
             [unknown, ..] => {
                 args.drain(0..1);
                 return Err(ArgumentsParseError::MalformedArguments(

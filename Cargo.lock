@@ -3,5 +3,12 @@
 version = 4
 
 [[package]]
+name = "SpeecherBot"
+version = "0.1.0"
+dependencies = [
+ "argument_parsing",
+]
+
+[[package]]
 name = "argument_parsing"
 version = "0.1.0"
