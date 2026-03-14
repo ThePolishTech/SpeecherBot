@@ -1,236 +1,85 @@
+pub mod structs_and_enums;
+pub use structs_and_enums::{
+    ParsedArgData,
+    PostArgParseStep,
+    ArgParseError,
+    HelpScreen,
+};
 
-#[derive(Debug, PartialEq)]
-pub struct ArgumentsParseResult {
-    pub overwritten_config_path: Option<String>,
-    pub action: ArgumentsAction
+use std::{
+    path::PathBuf,
+};
+
+
+
+fn parse_config_argument(config_argument: &str, output: &mut ParsedArgData) {
+    
+    match config_argument {
+        help if ["+help", "help"].contains(&help) => output.next_step
+            = PostArgParseStep::ShowHelpScreen(HelpScreen::Config),
+
+        "+generate" => output.next_step 
+            = PostArgParseStep::GenerateTemplateConfig,
+
+        "+verify" => output.next_step
+            = PostArgParseStep::VerifyConfigFile,
+
+        mut name => {
+            // In case the user is supplying a funky config name, they'll be
+            // wrapping the config name with escaped quotes (`"` characters),
+            // therefore we have to remove them if they are at both the
+            // begining, and end. I'm not gonna bother with more indepth
+            // parsing, because at that point just rename the file nerd!
+            if name.len() >= 2
+                && name.starts_with("\"") && name.ends_with("\"") {
+                name = &name[ 1 .. name.len() -1 ];
+            }
+
+            if name.is_empty() {
+                output.next_step = PostArgParseStep::Fail(
+                    ArgParseError::MissingConfigPath
+                );
+                return;
+            }
+
+
+            output.config_path = PathBuf::from(name)
+        },
+    }
 }
 
-#[derive(Debug, PartialEq)]
-pub enum ArgumentsAction {
-    ProceedAsUsual,
-    HelpScreen(HelpScreens),
-    ConfigAction(ConfigAction),
-}
 
-#[derive(Debug, PartialEq)]
-pub enum HelpScreens {
-    Default,
-    Config
-}
-
-#[derive(Debug, PartialEq)]
-pub enum ConfigAction {
-    Verify,
-    Generate,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum ArgumentsParseError {
-    MalformedArguments(String),
-    MissingConfigPath,
-    EmptyConfigName,
-}
-
-pub fn parse_arguments(arguments: Vec<String>) -> Result<ArgumentsParseResult, ArgumentsParseError> {
-    let mut output = ArgumentsParseResult {
-        overwritten_config_path: None,
-        action: ArgumentsAction::ProceedAsUsual
+pub fn parse_arguments(arguments: Vec<String>) -> ParsedArgData {
+    let mut arguments: Vec<&str> = arguments
+        .iter()
+        .map(AsRef::as_ref)
+        .collect();
+    
+    let mut output = ParsedArgData {
+        config_path: PathBuf::from("speecher_config.toml"),
+        next_step: PostArgParseStep::ProceedAsUsual
     };
 
-    let mut args = arguments
-        .iter()
-        .map(String::as_str)
-        .collect::<Vec<_>>();
-
-    while !args.is_empty() {
-        match args[..] {
-            ["--config", argument, ..] => {
-                match argument {
-                    "" => {
-                        return Err(ArgumentsParseError::EmptyConfigName);
-                    },
-                    "+verify" => {
-                        output.action = ArgumentsAction::ConfigAction(ConfigAction::Verify);
-                    },
-                    "+generate" => {
-                        output.action = ArgumentsAction::ConfigAction(ConfigAction::Generate);
-                    },
-                    other if ["help", "+help"].contains(&other) => {
-                        output.action = ArgumentsAction::HelpScreen(HelpScreens::Config);
-                    },
-
-                    // Ugh
-                    // There's gotta be a better way
-                    path if path.len() >= 2 => {
-                        let raw = path.to_string().chars().collect::<Vec<_>>();
-
-                        if raw.ends_with(&[ raw[0] ]) && ['\'', '\"'].contains(&raw[0]) {
-                            output.overwritten_config_path = Some( raw[1..raw.len()-1].iter().collect::<String>() )
-                        } else {
-                            output.overwritten_config_path = Some( raw.iter().collect::<String>() )
-                        }
-                    },
-                    path => output.overwritten_config_path = Some(path.to_string())
-                }
-                args.drain(0..2);
+    while !arguments.is_empty() {
+        
+        match arguments[..] {
+            ["--config", config_argument, ..] => {
+                parse_config_argument(config_argument, &mut output);
+                arguments.drain(0..2);
             },
             ["--config"] => {
-                args.drain(0..1);
-                return Err(ArgumentsParseError::MissingConfigPath);
-            },
-            [unknown, ..] => {
-                args.drain(0..1);
-                return Err(ArgumentsParseError::MalformedArguments(
-                    format!("Unkown argument: {unknown}")
-                ));
-            },
-            _ => {
-                args.drain(0..1);
+                output.next_step = PostArgParseStep::Fail(
+                    ArgParseError::MissingConfigPath
+                );
+                return output;
             }
+
+            [_, ..] => { arguments.drain(0..1); },
+            
+            [] => {}  // If empty, then we break out of the loop anyways
         }
     }
-    Ok(output)
-}
 
-
-
-
-
-#[cfg(test)]
-mod config_tests {
-    #![allow(dead_code, unused_variables)]
-    
-    #[allow(unused_imports)]
-    use crate::{
-        parse_arguments,
-        ArgumentsAction,
-        ArgumentsParseError,
-        ArgumentsParseResult,
-
-        ConfigAction,
-        HelpScreenOptions,
-    };
-
-
-    #[test]
-    fn parse_file_path() {
-        let example = "--config speecher_config.toml";
-        let expected: Result<ArgumentsParseResult, ArgumentsParseError> = Ok(
-            ArgumentsParseResult {
-                overwritten_config_path: Some("speecher_config.toml".to_string()),
-                action: ArgumentsAction::ProceedAsUsual
-            }
-        );
-
-        assert_eq!(
-            parse_arguments(example), expected
-        );
-    }
-
-    #[test]
-    fn parse_wierd_file_path() {
-        let example = "--config \"+help\"";
-        let expected: Result<ArgumentsParseResult, ArgumentsParseError> = Ok(
-            ArgumentsParseResult {
-                overwritten_config_path: Some("+help".to_string()),
-                action: ArgumentsAction::ProceedAsUsual
-            }
-        );
-
-        assert_eq!(
-            parse_arguments(example), expected
-        );
-    }
-
-    #[test]
-    fn parse_generate() {
-        let example = "--config +generate";
-        let expected: Result<ArgumentsParseResult, ArgumentsParseError> = Ok(
-            ArgumentsParseResult {
-                overwritten_config_path: None,
-                action: ArgumentsAction::ConfigAction(ConfigAction::Generate)
-            }
-        );
-
-        assert_eq!(
-            parse_arguments(example), expected
-        );
-    }
-
-    #[test]
-    fn parse_generate_at() {
-        let example = "--config at_path.toml --config +generate";
-        let expected: Result<ArgumentsParseResult, ArgumentsParseError> = Ok(
-            ArgumentsParseResult {
-                overwritten_config_path: Some("at_path.toml".to_string()),
-                action: ArgumentsAction::ConfigAction(ConfigAction::Generate)
-            }
-        ); 
-
-        assert_eq!(
-            parse_arguments(example), expected
-        );
-    }
-
-    #[test]
-    fn parse_verify() {
-        let example = "--config +verify";
-        let expected: Result<ArgumentsParseResult, ArgumentsParseError> = Ok(
-            ArgumentsParseResult {
-                overwritten_config_path: None,
-                action: ArgumentsAction::ConfigAction(ConfigAction::Verify)
-            }
-        ); 
-
-        assert_eq!(
-            parse_arguments(example), expected
-        );
-    }
-
-    #[test]
-    fn parse_verify_at() {
-        let example = "--config +verify --config at_path.toml";
-        let expected: Result<ArgumentsParseResult, ArgumentsParseError> = Ok(
-            ArgumentsParseResult {
-                overwritten_config_path: Some("at_path.toml".to_string()),
-                action: ArgumentsAction::ConfigAction(ConfigAction::Verify)
-            }
-        );
-
-        assert_eq!(
-            parse_arguments(example), expected
-        );
-    }
-
-    #[test]
-    fn parse_help1() {
-        let example = "--config +help";
-        let expected: Result<ArgumentsParseResult, ArgumentsParseError> = Ok(
-            ArgumentsParseResult {
-                overwritten_config_path: None,
-                action: ArgumentsAction::HelpScreen(HelpScreenOptions::Config)
-            }
-        );
-
-        assert_eq!(
-            parse_arguments(example), expected
-        );
-    }
-
-    #[test]
-    fn parse_help2() {
-        let example = "--config help";
-        let expected: Result<ArgumentsParseResult, ArgumentsParseError> = Ok(
-            ArgumentsParseResult {
-                overwritten_config_path: None,
-                action: ArgumentsAction::HelpScreen(HelpScreenOptions::Config)
-            }
-        );
-
-        assert_eq!(
-            parse_arguments(example), expected
-        );
-    }
-
+    output
 }
 
