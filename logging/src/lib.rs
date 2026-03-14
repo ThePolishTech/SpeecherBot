@@ -17,6 +17,12 @@ pub enum TimestampTimezoneType {
 pub struct Logger {
     timestap_timezone_type: TimestampTimezoneType
 }
+impl Default for Logger {
+    fn default() -> Self {
+        Logger::new()
+    }
+}
+
 impl Logger {
     pub fn new() -> Logger {
         Logger {
@@ -24,9 +30,9 @@ impl Logger {
         }
     }
     pub fn set_timezone_type(
-        &mut self,
+        mut self,
         timezone_type: TimestampTimezoneType
-    ) -> &mut Self {
+    ) -> Self {
         self.timestap_timezone_type = timezone_type;
         self
     }
@@ -45,7 +51,7 @@ impl Logger {
                 current_timestamp
             ),
             TimestampTimezoneType::Utc => time_format::strftime_ms_utc(
-                "%Y-%m-%d %H:%M:%S.{ms}",
+                "%Y-%m-%d %H:%M:%S.{ms} %Z",
                 current_timestamp
             ),
         }.unwrap_or(String::from("TIMESTAMP ERROR"));
